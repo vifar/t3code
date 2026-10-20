@@ -1546,7 +1546,13 @@ describe("orchestrator MCP toolkit", () => {
             const scheduledListCall = yield* invoke("list_scheduled_tasks", {});
             expect(scheduledListCall.isError).toBe(false);
             expect(scheduledListCall.structuredContent).toMatchObject({
-              tasks: [{ scheduledTaskId, boundThreadId: parentThreadId }],
+              tasks: [
+                {
+                  scheduledTaskId,
+                  boundThreadId: parentThreadId,
+                  modelSelection: { instanceId: codexInstanceId, model: codexModel },
+                },
+              ],
             });
 
             const scheduledUpdateCall = yield* invoke("update_scheduled_task", {
@@ -2853,6 +2859,30 @@ describe("orchestrator MCP toolkit", () => {
             expect(foreignListed.threads.map((thread) => thread.threadId)).toEqual([
               foreignThreadId,
             ]);
+            // The list reports the checkout each thread works in, like the read tool does.
+            const branchThreadId = ThreadId.make("thread:mcp-branch");
+            yield* orchestrator.dispatch({
+              type: "thread.create",
+              createdBy: "user",
+              creationSource: "web",
+              commandId: CommandId.make("command:mcp-branch:create"),
+              threadId: branchThreadId,
+              projectId,
+              title: "Thread on a branch",
+              modelSelection: codexSelection,
+              runtimeMode: "full-access",
+              interactionMode: "default",
+              branch: "feature/mcp-branch",
+              worktreePath: cwd,
+            });
+            const branchReadCall = yield* invoke("t3_thread_read", { threadId: branchThreadId });
+            const branchRead = yield* decodeThreadReadResult(branchReadCall.structuredContent).pipe(
+              Effect.orDie,
+            );
+            expect(branchRead.thread).toMatchObject({
+              branch: "feature/mcp-branch",
+              worktreePath: cwd,
+            });
             const listCall = yield* invoke("t3_thread_list", {
               includeSubagents: false,
               limit: 100,
@@ -2867,8 +2897,18 @@ describe("orchestrator MCP toolkit", () => {
                 emptyThread.threadId,
                 promptedThread.threadId,
                 activeThread.threadId,
+                branchThreadId,
               ]),
             );
+            expect(
+              listed.threads.find((thread) => thread.threadId === branchThreadId),
+            ).toMatchObject({
+              branch: "feature/mcp-branch",
+              worktreePath: cwd,
+            });
+            expect(
+              listed.threads.find((thread) => thread.threadId === parentThreadId),
+            ).toMatchObject({ branch: null, worktreePath: cwd });
             expect(
               listed.threads.find((thread) => thread.threadId === emptyThread.threadId),
             ).toMatchObject({
