@@ -2875,6 +2875,22 @@ describe("orchestrator MCP toolkit", () => {
               branch: "feature/mcp-branch",
               worktreePath: cwd,
             });
+            // A thread in the project root has neither a branch nor a worktree of its own.
+            const rootThreadId = ThreadId.make("thread:mcp-project-root");
+            yield* orchestrator.dispatch({
+              type: "thread.create",
+              createdBy: "user",
+              creationSource: "web",
+              commandId: CommandId.make("command:mcp-project-root:create"),
+              threadId: rootThreadId,
+              projectId,
+              title: "Thread in the project root",
+              modelSelection: codexSelection,
+              runtimeMode: "full-access",
+              interactionMode: "default",
+              branch: null,
+              worktreePath: null,
+            });
             const branchReadCall = yield* invoke("t3_thread_read", { threadId: branchThreadId });
             const branchRead = yield* decodeThreadReadResult(branchReadCall.structuredContent).pipe(
               Effect.orDie,
@@ -2898,6 +2914,7 @@ describe("orchestrator MCP toolkit", () => {
                 promptedThread.threadId,
                 activeThread.threadId,
                 branchThreadId,
+                rootThreadId,
               ]),
             );
             expect(
@@ -2906,6 +2923,12 @@ describe("orchestrator MCP toolkit", () => {
               branch: "feature/mcp-branch",
               worktreePath: cwd,
             });
+            expect(listed.threads.find((thread) => thread.threadId === rootThreadId)).toMatchObject(
+              {
+                branch: null,
+                worktreePath: null,
+              },
+            );
             expect(
               listed.threads.find((thread) => thread.threadId === parentThreadId),
             ).toMatchObject({ branch: null, worktreePath: cwd });
